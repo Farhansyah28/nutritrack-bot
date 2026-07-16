@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - NutriTrack Admin</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="login-body">
+  <div class="background-blob blob-1"></div>
+  <div class="background-blob blob-2"></div>
+
+  <div class="login-container glass-panel">
+    <div class="logo" style="text-align: center; margin-bottom: 2rem;">
+      <h1>🍏 NutriTrack</h1>
+      <p style="color: var(--text-secondary); margin-top: 0.5rem;">Admin Dashboard</p>
+    </div>
+    
+    <form id="login-form">
+      <div class="input-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" placeholder="Masukkan password admin" required>
+      </div>
+      <div id="error-message" class="error-msg"></div>
+      <button type="submit" class="btn-primary" style="width: 100%; justify-content: center; margin-top: 1.5rem;">Masuk</button>
+    </form>
+  </div>
+
+  <script>
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const password = document.getElementById('password').value;
+      const errorMsg = document.getElementById('error-message');
+      const submitBtn = e.target.querySelector('button');
+      
+      submitBtn.classList.add('loading');
+      submitBtn.innerText = 'Memverifikasi...';
+      
+      try {
+        const res = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password })
+        });
+        
+        if (res.ok) {
+          window.location.href = '/';
+        } else {
+          errorMsg.innerText = '❌ Password salah.';
+          errorMsg.style.display = 'block';
+        }
+      } catch (err) {
+        errorMsg.innerText = '❌ Gagal terhubung ke server.';
+        errorMsg.style.display = 'block';
+      } finally {
+        submitBtn.classList.remove('loading');
+        submitBtn.innerText = 'Masuk';
+      }
+    });
+  </script>
+</body>
+</html>

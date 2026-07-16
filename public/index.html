@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NutriTrack Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="background-blob blob-1"></div>
+  <div class="background-blob blob-2"></div>
+
+  <div class="container">
+    <header class="glass-panel">
+      <div class="logo">
+        <h1>🍏 NutriTrack Admin</h1>
+        <button id="logout-btn" class="btn-secondary" style="margin-top: 1rem;">🚪 Logout</button>
+      </div>
+      <div class="stats">
+        <div class="stat-card">
+          <span class="stat-title">Total Users</span>
+          <span class="stat-value" id="total-users">0</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-title">Active Today</span>
+          <span class="stat-value" id="active-today">0</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="glass-panel">
+      <div class="table-header">
+        <h2>User Database</h2>
+        <button id="refresh-btn" class="btn-primary">🔄 Refresh</button>
+      </div>
+      <div class="table-container">
+        <table id="users-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Name</th>
+              <th>Gender / Age</th>
+              <th>Body (kg/cm)</th>
+              <th>Target Calories</th>
+              <th>Target Macros (P/C/F)</th>
+              <th>Status</th>
+              <th>Joined At</th>
+            </tr>
+          </thead>
+          <tbody id="users-tbody">
+            <!-- Data will be loaded here via JS -->
+          </tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
