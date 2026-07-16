@@ -332,5 +332,13 @@ bot.catch((err) => {
   console.error(err.error);
 });
 
+// Setup Menu Shortcut Telegram
+bot.api.setMyCommands([
+  { command: 'start', description: 'Mulai atau ubah profil' },
+  { command: 'stats', description: 'Ringkasan kalori hari ini' },
+  { command: 'history', description: 'Statistik 7 hari terakhir' },
+  { command: 'undo', description: 'Batal pencatatan terakhir' }
+]).catch(err => console.error("Gagal set menu:", err));
+
 console.log('🤖 Bot sedang berjalan...');
 bot.start();
