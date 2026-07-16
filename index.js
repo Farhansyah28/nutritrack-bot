@@ -96,11 +96,15 @@ bot.command('start', async (ctx) => {
   const user = getUser(ctx.from.id, ctx.from.first_name);
   updateUser(user.id, { onboarding_step: 'ask_gender' });
   
+  const keyboard = new InlineKeyboard()
+    .text("👨 Laki-laki", "gender_L")
+    .text("👩 Perempuan", "gender_P");
+
   await ctx.reply(
     `Halo ${user.first_name}! Selamat datang di NutriTrack Bot 🏃‍♂️🍏\n\n` +
     `Sebelum kita mulai melacak makanan dan olahraga, mari isi data diri Anda untuk menghitung BMI dan Target Kalori harian.\n\n` +
-    `Apa Jenis Kelamin Anda?\nKetik *L* untuk Laki-laki atau *P* untuk Perempuan.`,
-    { parse_mode: 'Markdown' }
+    `Apa Jenis Kelamin Anda?`,
+    { reply_markup: keyboard, parse_mode: 'Markdown' }
   );
 });
 
@@ -112,6 +116,8 @@ bot.command('stats', async (ctx) => {
   const target = user.target_calories || 0;
   const sisa = target - stats.calories_in + stats.calories_out;
   
+  const keyboard = new InlineKeyboard().text("📊 Lihat History 7 Hari", "cmd_history");
+
   await ctx.reply(
     `📊 *Ringkasan Hari Ini:*\n\n` +
     `🎯 Target Harian: ${target} kcal\n` +
@@ -124,7 +130,7 @@ bot.command('stats', async (ctx) => {
     `=======================\n` +
     `💡 *SISA KALORI:* ${sisa} kcal\n\n` +
     `Terus semangat! 💪`,
-    { parse_mode: 'Markdown' }
+    { parse_mode: 'Markdown', reply_markup: keyboard }
   );
 });
 
@@ -155,6 +161,58 @@ bot.command('undo', async (ctx) => {
   } else {
     await ctx.reply('⚠️ Tidak ada log yang bisa dihapus.');
   }
+});
+
+bot.callbackQuery("cmd_history", async (ctx) => {
+  const user = getUser(ctx.from.id, ctx.from.first_name);
+  if (user.onboarding_step !== 'completed') {
+    await ctx.answerCallbackQuery("Selesaikan pendaftaran dulu (/start).");
+    return;
+  }
+  const stats = getWeeklyStats(user.id);
+  const avgIn = Math.round(stats.calories_in / 7);
+  const avgOut = Math.round(stats.calories_out / 7);
+  
+  await ctx.reply(
+    `📅 *Statistik 7 Hari Terakhir:*\n\n` +
+    `Total Kalori Masuk: ${stats.calories_in} kcal\n` +
+    `Rata-rata Harian Masuk: ${avgIn} kcal/hari\n\n` +
+    `Total Kalori Dibakar: ${stats.calories_out} kcal\n` +
+    `Rata-rata Harian Dibakar: ${avgOut} kcal/hari\n`,
+    { parse_mode: 'Markdown' }
+  );
+  await ctx.answerCallbackQuery();
+});
+
+bot.callbackQuery(/^gender_(.+)$/, async (ctx) => {
+  const gender = ctx.match[1];
+  const user = getUser(ctx.from.id, ctx.from.first_name);
+  if (user.onboarding_step === 'ask_gender') {
+    updateUser(user.id, { gender, onboarding_step: 'ask_age' });
+    await ctx.editMessageText(`Jenis kelamin Anda: *${gender === 'L' ? 'Laki-laki' : 'Perempuan'}*`, { parse_mode: 'Markdown' });
+    await ctx.reply("Berapa umur Anda (dalam tahun)? (Contoh: 25)");
+  }
+  await ctx.answerCallbackQuery();
+});
+
+bot.callbackQuery(/^activity_(.+)$/, async (ctx) => {
+  const activity_level = parseFloat(ctx.match[1]);
+  const user = getUser(ctx.from.id, ctx.from.first_name);
+  if (user.onboarding_step === 'ask_activity') {
+    updateUser(user.id, { activity_level, onboarding_step: 'ask_target' });
+    const updatedUser = getUser(ctx.from.id, ctx.from.first_name);
+    const { bmi, tdee } = calculateBMITDEE(updatedUser);
+    
+    await ctx.editMessageText(`Tingkat Aktivitas Anda: *${activity_level}*`, { parse_mode: 'Markdown' });
+    await ctx.reply(
+      `📊 Berdasarkan data Anda:\n` +
+      `BMI: *${bmi}*\n` +
+      `Estimasi Kalori Terbakar Harian (TDEE): *${tdee} kcal*\n\n` +
+      `Berapa *Target Kalori Harian* Anda? (Contoh: 2000)`,
+      { parse_mode: 'Markdown' }
+    );
+  }
+  await ctx.answerCallbackQuery();
 });
 
 bot.callbackQuery("undo_last", async (ctx) => {
@@ -233,13 +291,6 @@ bot.on('message:text', async (ctx) => {
   const lowerText = text.toLowerCase();
 
   switch (user.onboarding_step) {
-    case 'ask_gender':
-      if (lowerText === 'l' || lowerText === 'p') {
-        updateUser(user.id, { gender: lowerText.toUpperCase(), onboarding_step: 'ask_age' });
-        await ctx.reply("Berapa umur Anda (dalam tahun)? (Contoh: 25)");
-      } else await ctx.reply("Mohon balas dengan huruf *L* untuk Laki-laki atau *P* untuk Perempuan.", { parse_mode: 'Markdown' });
-      break;
-      
     case 'ask_age':
       const age = parseInt(text);
       if (!isNaN(age) && age > 0) {
@@ -260,33 +311,18 @@ bot.on('message:text', async (ctx) => {
       const height = parseFloat(text);
       if (!isNaN(height) && height > 0) {
         updateUser(user.id, { height, onboarding_step: 'ask_activity' });
+        
+        const keyboard = new InlineKeyboard()
+          .text("🛋️ Jarang / Tidak Pernah", "activity_1.2").row()
+          .text("🚶 Ringan (1-3x / mgg)", "activity_1.375").row()
+          .text("🏃 Sedang (3-5x / mgg)", "activity_1.55").row()
+          .text("🏋️ Sangat Aktif", "activity_1.725");
+
         await ctx.reply(
-          "Seberapa sering Anda berolahraga dalam seminggu?\n" +
-          "1: Jarang / Tidak pernah\n" +
-          "2: 1-3 kali seminggu\n" +
-          "3: 3-5 kali seminggu\n" +
-          "4: Sangat aktif / Setiap hari\n\n" +
-          "Ketik angka 1, 2, 3, atau 4."
+          "Seberapa sering Anda berolahraga dalam seminggu?",
+          { reply_markup: keyboard }
         );
       } else await ctx.reply("Mohon masukkan angka tinggi badan yang valid.");
-      break;
-
-    case 'ask_activity':
-      const activityMap = { '1': 1.2, '2': 1.375, '3': 1.55, '4': 1.725 };
-      if (activityMap[text]) {
-        const activity_level = activityMap[text];
-        updateUser(user.id, { activity_level, onboarding_step: 'ask_target' });
-        user = getUser(ctx.from.id, ctx.from.first_name);
-        const { bmi, tdee } = calculateBMITDEE(user);
-        
-        await ctx.reply(
-          `📊 Berdasarkan data Anda:\n` +
-          `BMI: *${bmi}*\n` +
-          `Estimasi Kalori Terbakar Harian (TDEE): *${tdee} kcal*\n\n` +
-          `Berapa *Target Kalori Harian* Anda? (Contoh: 2000)`,
-          { parse_mode: 'Markdown' }
-        );
-      } else await ctx.reply("Mohon ketik angka 1, 2, 3, atau 4.");
       break;
 
     case 'ask_target':
