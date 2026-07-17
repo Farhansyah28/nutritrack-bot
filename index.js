@@ -92,6 +92,38 @@ function calculateBMITDEE(user) {
   return { bmi: bmi.toFixed(1), tdee: Math.round(tdee) };
 }
 
+async function completeOnboarding(ctx, user, target) {
+  // Hitung target makro berdasar pedoman ISSN (Protein 1.8g/kg BB, Lemak 25%)
+  const target_protein = Math.round(user.weight * 1.8);
+  const target_fat = Math.round((target * 0.25) / 9);
+  
+  // Sisa kalori untuk karbohidrat
+  const protein_cal = target_protein * 4;
+  const fat_cal = target_fat * 9;
+  const carbs_cal = target - protein_cal - fat_cal;
+  const target_carbs = Math.max(0, Math.round(carbs_cal / 4));
+
+  updateUser(user.id, { 
+    target_calories: target, 
+    target_protein,
+    target_carbs,
+    target_fat,
+    onboarding_step: 'completed' 
+  });
+
+  await ctx.reply(
+    "✅ Pendaftaran Selesai!\n\n" +
+    `🎯 Target Kalori Anda: *${target} kcal*\n\n` +
+    "Target Makro (Pedoman Ahli Gizi / ISSN):\n" +
+    `🥩 Protein: ${target_protein}g\n` +
+    `🍞 Karbohidrat: ${target_carbs}g\n` +
+    `🥑 Lemak: ${target_fat}g\n\n` +
+    "Mulai lacak nutrisi Anda dengan mengirimkan *Foto Makanan* atau cukup *ketik teks* (misal: 'Makan nasi goreng 300 kalori').\n" +
+    "Ketik /undo jika ingin menghapus log terakhir.",
+    { parse_mode: 'Markdown' }
+  );
+}
+
 bot.command('start', async (ctx) => {
   const user = getUser(ctx.from.id, ctx.from.first_name);
   updateUser(user.id, { onboarding_step: 'ask_gender' });
@@ -203,14 +235,35 @@ bot.callbackQuery(/^activity_(.+)$/, async (ctx) => {
     const updatedUser = getUser(ctx.from.id, ctx.from.first_name);
     const { bmi, tdee } = calculateBMITDEE(updatedUser);
     
+    // Hitungan Rekomendasi
+    const lossTarget = Math.max(tdee - 500, updatedUser.gender === 'L' ? 1500 : 1200);
+    const maintainTarget = tdee;
+    const bulkTarget = tdee + 300;
+
+    const keyboard = new InlineKeyboard()
+      .text(`📉 Fat Loss (${lossTarget} kcal)`, `target_${lossTarget}`).row()
+      .text(`⚖️ Maintain (${maintainTarget} kcal)`, `target_${maintainTarget}`).row()
+      .text(`📈 Muscle Gain (${bulkTarget} kcal)`, `target_${bulkTarget}`);
+    
     await ctx.editMessageText(`Tingkat Aktivitas Anda: *${activity_level}*`, { parse_mode: 'Markdown' });
     await ctx.reply(
-      `📊 Berdasarkan data Anda:\n` +
+      `📊 **Berdasarkan Data Anda (Rumus Mifflin-St Jeor):**\n` +
       `BMI: *${bmi}*\n` +
-      `Estimasi Kalori Terbakar Harian (TDEE): *${tdee} kcal*\n\n` +
-      `Berapa *Target Kalori Harian* Anda? (Contoh: 2000)`,
-      { parse_mode: 'Markdown' }
+      `TDEE (Kalori Terbakar Harian): *${tdee} kcal*\n\n` +
+      `🎯 **Pilih Tujuan Anda:**\n` +
+      `*(Pilih salah satu tombol di bawah, atau **ketik angka manual** jika Anda punya target sendiri)*`,
+      { parse_mode: 'Markdown', reply_markup: keyboard }
     );
+  }
+  await ctx.answerCallbackQuery();
+});
+
+bot.callbackQuery(/^target_(.+)$/, async (ctx) => {
+  const target = parseInt(ctx.match[1]);
+  const user = getUser(ctx.from.id, ctx.from.first_name);
+  if (user.onboarding_step === 'ask_target') {
+    await ctx.editMessageText(`Tujuan Kalori Pilihan: *${target} kcal*`, { parse_mode: 'Markdown' });
+    await completeOnboarding(ctx, user, target);
   }
   await ctx.answerCallbackQuery();
 });
@@ -328,29 +381,7 @@ bot.on('message:text', async (ctx) => {
     case 'ask_target':
       const target = parseInt(text);
       if (!isNaN(target) && target > 0) {
-        // Otomatis hitung target macro (Protein 30%, Carbs 35%, Fat 35%)
-        const target_protein = Math.round((target * 0.3) / 4);
-        const target_carbs = Math.round((target * 0.35) / 4);
-        const target_fat = Math.round((target * 0.35) / 9);
-
-        updateUser(user.id, { 
-          target_calories: target, 
-          target_protein,
-          target_carbs,
-          target_fat,
-          onboarding_step: 'completed' 
-        });
-
-        await ctx.reply(
-          "✅ Pendaftaran Selesai!\n\n" +
-          "Target Makro Anda:\n" +
-          `🥩 Protein: ${target_protein}g\n` +
-          `🍞 Karbohidrat: ${target_carbs}g\n` +
-          `🥑 Lemak: ${target_fat}g\n\n` +
-          "Mulai lacak nutrisi Anda dengan mengirimkan *Foto Makanan* atau cukup *ketik teks* (misal: 'Makan nasi goreng 300 kalori').\n" +
-          "Ketik /undo jika ingin menghapus log terakhir.",
-          { parse_mode: 'Markdown' }
-        );
+        await completeOnboarding(ctx, user, target);
       } else await ctx.reply("Mohon masukkan angka target kalori yang valid.");
       break;
 
